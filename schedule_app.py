@@ -72,7 +72,7 @@ _DEFAULTS = dict(
     sessions=[], session_dates={},
     session_subjects={},   # Dict[str, List[str]]
     matrix={},
-    all_subjects=[],       # master list built from teachers' subjects
+
     result=None,
 )
 for k, v in _DEFAULTS.items():
@@ -95,13 +95,7 @@ def sync_matrix():
             st.session_state.matrix[k] = False
 
 
-def refresh_subject_list():
-    """Rebuild master subject list from teacher subjects."""
-    seen = []
-    for s in st.session_state.teacher_subjects.values():
-        if s and s not in seen:
-            seen.append(s)
-    st.session_state.all_subjects = seen
+
 
 
 # ─── Excel style helpers ──────────────────────────────────────────────────────
@@ -364,47 +358,7 @@ def _run_scheduler():
 # PAGE: WELCOME
 # ═══════════════════════════════════════════════════════════════════════════════
 if st.session_state.page == "welcome":
-    st.markdown("""
-    <div class="app-header">
-      <h1>🎓 جدول توزيع المراقبين</h1>
-      <div class="sub">نظام ذكي لإعداد جداول الامتحانات — يدعم أكثر من مادة لكل حصة</div>
-    </div>""", unsafe_allow_html=True)
-
-    st.markdown("### اختر طريقة الإدخال")
-    col1, col2 = st.columns(2, gap="large")
-
-    with col1:
-        st.markdown("""
-        <div class="opt-card">
-          <div class="oc-icon">📂</div>
-          <h3>رفع ملف Excel</h3>
-          <p>الخيار الأسرع إذا كانت بياناتك جاهزة.</p>
-          <ul>
-            <li><b>TEACHERS</b> — A: الاسم | B: المادة</li>
-            <li><b>ROOMS</b> — A: القاعة</li>
-            <li><b>SESSIONS</b> — A: الاسم | B: التاريخ | C, D, E…: المواد</li>
-            <li><b>ROOM_SESSION_MATRIX</b> — X في الخلايا النشطة</li>
-          </ul>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("<div style='margin-top:.8rem'></div>", unsafe_allow_html=True)
-        if st.button("📂  ابدأ برفع ملف Excel", use_container_width=True):
-            go("input_excel")
-
-    with col2:
-        st.markdown("""
-        <div class="opt-card">
-          <div class="oc-icon">⚡</div>
-          <h3>إدخال سريع</h3>
-          <p>أدخل الأعداد، تُنشأ الأسماء تلقائياً.</p>
-          <ul>
-            <li>أضف مادة واحدة أو أكثر لكل حصة</li>
-            <li>الاحتياطيون = 22% من إجمالي الأساتذة</li>
-            <li>الإشعارات تشمل المراقبة والاحتياط</li>
-          </ul>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("<div style='margin-top:.8rem'></div>", unsafe_allow_html=True)
-        if st.button("⚡  ابدأ بالإدخال السريع", use_container_width=True):
-            go("input_quick")
+    go("input_excel")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -413,23 +367,42 @@ if st.session_state.page == "welcome":
 elif st.session_state.page == "input_excel":
     st.markdown("""
     <div class="app-header">
-      <h1>📂 رفع ملف Excel</h1>
-      <div class="sub">ارفع ملف القالب ثم ولّد الجدول</div>
+      <h1>🎓 جدول توزيع المراقبين</h1>
+      <div class="sub">ارفع ملف القالب لتوليد الجدول تلقائياً</div>
     </div>""", unsafe_allow_html=True)
 
-    if st.button("← العودة"): go("welcome")
+    # Template download
+    col_info, col_dl = st.columns([3, 1], gap="large")
+    with col_info:
+        st.markdown("""<div class="card">
+        <div class="card-title">📋 طريقة الاستخدام</div>
+        <ol style="direction:rtl;line-height:2.2;font-size:.95rem">
+          <li>حمّل القالب الرسمي بالضغط على الزر المجاور</li>
+          <li>افتح الملف وتوجّه إلى ورقة <b>الإعدادات</b> — أدخل عدد القاعات والحصص</li>
+          <li>انتقل إلى ورقة <b>الأساتذة</b> — أدخل الأسماء والمواد وأرقام التأجير</li>
+          <li>انتقل إلى ورقة <b>الحصص</b> — أدخل التاريخ والتوقيت والمواد وعدد القاعات العاملة</li>
+          <li>ورقة <b>المصفوفة</b> تُحسب تلقائياً — لا تعدّلها</li>
+          <li>ارفع الملف أدناه وولّد الجدول</li>
+        </ol>
+        </div>""", unsafe_allow_html=True)
+    with col_dl:
+        st.markdown("<div style='margin-top:1.5rem'></div>", unsafe_allow_html=True)
+        try:
+            import pathlib
+            tpl = pathlib.Path(__file__).parent / "قالب_جدول_المراقبة.xlsx"
+            if tpl.exists():
+                st.download_button(
+                    "⬇️  تحميل القالب",
+                    data=open(tpl,"rb").read(),
+                    file_name="قالب_جدول_المراقبة.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
+        except Exception:
+            pass
 
-    st.markdown("""<div class="card">
-    <div class="card-title">📋 هيكل الملف</div>
-    <ul style="direction:rtl;line-height:2.2">
-      <li><b>TEACHERS</b> — A: الاسم &nbsp;|&nbsp; B: المادة المُدرَّسة</li>
-      <li><b>ROOMS</b> — A: اسم القاعة</li>
-      <li><b>SESSIONS</b> — A: اسم الحصة &nbsp;|&nbsp; B: التاريخ &nbsp;|&nbsp; C, D, E…: المواد الممتحَنة (عمود لكل مادة، أو مادة واحدة بفصل فارزة)</li>
-      <li><b>ROOM_SESSION_MATRIX</b> — X في الخلايا النشطة</li>
-    </ul>
-    </div>""", unsafe_allow_html=True)
-
-    uploaded = st.file_uploader("ارفع ملف .xlsx", type=["xlsx"])
+    st.markdown("<div style='margin-top:.5rem'></div>", unsafe_allow_html=True)
+    uploaded = st.file_uploader("📂  ارفع ملف Excel هنا", type=["xlsx"])
     if uploaded:
         import tempfile, pathlib
         tmp = pathlib.Path(tempfile.gettempdir()) / uploaded.name
@@ -444,10 +417,17 @@ elif st.session_state.page == "input_excel":
             st.session_state.session_subjects = dict(data.session_subjects)
             st.session_state.matrix           = {k: True for k in data.active_pairs}
             st.session_state.input_mode       = "excel"
-            refresh_subject_list()
-            st.success(f"✅  {len(data.teachers)} أستاذ · {len(data.rooms)} قاعة · {len(data.sessions)} حصة · {len(data.active_pairs)} زوج نشط")
-            if st.button("⚡  توليد الجدول", type="primary"):
-                _run_scheduler()
+
+            c1,c2,c3,c4 = st.columns(4)
+            c1.metric("👨‍🏫 أستاذ",     len(data.teachers))
+            c2.metric("🚪 قاعة",         len(data.rooms))
+            c3.metric("📅 حصة",           len(data.sessions))
+            c4.metric("✅ زوج نشط",       len(data.active_pairs))
+
+            _, bc, _ = st.columns([1,2,1])
+            with bc:
+                if st.button("⚡  توليد الجدول", type="primary", use_container_width=True):
+                    _run_scheduler()
         except Exception as e:
             st.error(f"❌  {e}")
 
@@ -455,158 +435,6 @@ elif st.session_state.page == "input_excel":
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE: INPUT — QUICK
 # ═══════════════════════════════════════════════════════════════════════════════
-elif st.session_state.page == "input_quick":
-    st.markdown("""
-    <div class="app-header">
-      <h1>⚡ الإدخال السريع</h1>
-      <div class="sub">حدّد الأعداد، عدّل الأسماء والمواد، ثم اضبط المصفوفة</div>
-    </div>""", unsafe_allow_html=True)
-
-    if st.button("← العودة"): go("welcome")
-    st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
-
-    # Step 1: counts
-    st.markdown('<div class="blk"><span class="bn">١</span> أدخل الأعداد</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    n_t = c1.number_input("عدد الأساتذة", min_value=2,  max_value=500, value=max(len(st.session_state.teachers), 6),  step=1)
-    n_r = c2.number_input("عدد القاعات",  min_value=1,  max_value=100, value=max(len(st.session_state.rooms), 3),     step=1)
-    n_s = c3.number_input("عدد الحصص",   min_value=1,  max_value=100, value=max(len(st.session_state.sessions), 4),  step=1)
-
-    if c4.button("🔄  إنشاء القوائم", use_container_width=True):
-        st.session_state.teachers         = [f"أستاذ {i+1}" for i in range(n_t)]
-        st.session_state.teacher_subjects = {f"أستاذ {i+1}": "" for i in range(n_t)}
-        st.session_state.rooms            = [f"قاعة {i+1}"  for i in range(n_r)]
-        st.session_state.sessions         = [f"حصة {i+1}"   for i in range(n_s)]
-        st.session_state.session_dates    = {f"حصة {i+1}": "" for i in range(n_s)}
-        st.session_state.session_subjects = {f"حصة {i+1}": [] for i in range(n_s)}
-        st.session_state.matrix           = {(r, s): True
-                                             for r in st.session_state.rooms
-                                             for s in st.session_state.sessions}
-        refresh_subject_list()
-        st.rerun()
-
-    if not st.session_state.teachers:
-        st.info("👆  أدخل الأعداد ثم اضغط «إنشاء القوائم»")
-        st.stop()
-
-    # Step 2: names / subjects / dates
-    st.markdown("<div style='margin-top:1.4rem'></div>", unsafe_allow_html=True)
-    st.markdown('<div class="blk"><span class="bn">٢</span> عدّل الأسماء والمواد</div>', unsafe_allow_html=True)
-
-    tab_t, tab_s, tab_r = st.tabs(["👨‍🏫 الأساتذة", "📅 الحصص", "🚪 القاعات"])
-
-    # ── Teachers tab ──────────────────────────────────────────────────────────
-    with tab_t:
-        st.caption("اسم الأستاذ  |  المادة التي يُدرّسها")
-        new_t_names, new_t_subjs = [], []
-        for i, t in enumerate(st.session_state.teachers):
-            ca, cb = st.columns([3, 3])
-            new_t_names.append(ca.text_input(f"t_n_{i}", value=t, key=f"tn_{i}", label_visibility="collapsed"))
-            new_t_subjs.append(cb.text_input(f"t_s_{i}",
-                                             value=st.session_state.teacher_subjects.get(t, ""),
-                                             key=f"ts_{i}", placeholder="المادة",
-                                             label_visibility="collapsed"))
-        if st.button("💾 حفظ الأساتذة", key="save_t"):
-            new_names = [v.strip() or f"أستاذ {i+1}" for i, v in enumerate(new_t_names)]
-            st.session_state.teachers         = new_names
-            st.session_state.teacher_subjects = {n: new_t_subjs[i].strip() for i, n in enumerate(new_names)}
-            refresh_subject_list(); sync_matrix(); st.rerun()
-
-    # ── Sessions tab ──────────────────────────────────────────────────────────
-    with tab_s:
-        st.caption("اسم الحصة  |  التاريخ  |  المواد الممتحَنة (اختر من القائمة أو اكتب)")
-
-        # collect known subjects from teachers
-        known_subjects = st.session_state.all_subjects
-
-        new_s_names, new_s_dates, new_s_subjs = [], [], []
-        for i, s in enumerate(st.session_state.sessions):
-            ca, cb, cc = st.columns([2, 2, 4])
-            new_s_names.append(ca.text_input(f"s_n_{i}", value=s, key=f"sn_{i}", label_visibility="collapsed"))
-            new_s_dates.append(cb.text_input(f"s_d_{i}",
-                                             value=st.session_state.session_dates.get(s, ""),
-                                             key=f"sd_{i}", placeholder="التاريخ",
-                                             label_visibility="collapsed"))
-            current_subjs = st.session_state.session_subjects.get(s, [])
-            if known_subjects:
-                # multiselect with free creation
-                selected = cc.multiselect(
-                    f"s_sub_{i}",
-                    options=known_subjects,
-                    default=[v for v in current_subjs if v in known_subjects],
-                    key=f"ss_ms_{i}",
-                    label_visibility="collapsed",
-                )
-                # also allow typing extra subjects not yet in teacher list
-                extra = cc.text_input(f"s_ex_{i}", key=f"ss_ex_{i}",
-                                      placeholder="أضف مادة أخرى (فصل بفارزة)",
-                                      label_visibility="collapsed")
-                extra_list = [v.strip() for v in extra.split(",") if v.strip()]
-                combined = list(dict.fromkeys(selected + extra_list))
-                new_s_subjs.append(combined)
-            else:
-                # no teacher subjects yet — free text
-                raw = cc.text_input(f"s_sub_{i}",
-                                    value="، ".join(current_subjs),
-                                    key=f"ss_tx_{i}",
-                                    placeholder="مثال: رياضيات، فيزياء",
-                                    label_visibility="collapsed")
-                new_s_subjs.append([v.strip() for v in raw.replace("،", ",").split(",") if v.strip()])
-
-        if st.button("💾 حفظ الحصص", key="save_s"):
-            new_names = [v.strip() or f"حصة {i+1}" for i, v in enumerate(new_s_names)]
-            st.session_state.sessions         = new_names
-            st.session_state.session_dates    = {n: new_s_dates[i].strip() for i, n in enumerate(new_names)}
-            st.session_state.session_subjects = {n: new_s_subjs[i] for i, n in enumerate(new_names)}
-            sync_matrix(); st.rerun()
-
-    # ── Rooms tab ─────────────────────────────────────────────────────────────
-    with tab_r:
-        cols_r = st.columns(4)
-        new_rooms = []
-        for i, r in enumerate(st.session_state.rooms):
-            new_rooms.append(cols_r[i % 4].text_input(f"#{i+1}", value=r, key=f"rn_{i}", label_visibility="collapsed"))
-        if st.button("💾 حفظ القاعات", key="save_r"):
-            st.session_state.rooms = [v.strip() or f"قاعة {i+1}" for i, v in enumerate(new_rooms)]
-            sync_matrix(); st.rerun()
-
-    # Step 3: matrix
-    st.markdown("<div style='margin-top:1.6rem'></div>", unsafe_allow_html=True)
-    st.markdown('<div class="blk"><span class="bn">٣</span> مصفوفة النشاط</div>', unsafe_allow_html=True)
-    sync_matrix()
-
-    h_cols = st.columns([2] + [1] * len(st.session_state.sessions))
-    h_cols[0].markdown("<b style='font-size:.85rem'>القاعة</b>", unsafe_allow_html=True)
-    for j, s in enumerate(st.session_state.sessions):
-        subjs_lbl = " · ".join(st.session_state.session_subjects.get(s, []))
-        lbl = f"{s}"
-        if st.session_state.session_dates.get(s):
-            lbl += f"\n{st.session_state.session_dates[s]}"
-        if subjs_lbl:
-            lbl += f"\n{subjs_lbl}"
-        h_cols[j+1].markdown(
-            f"<div style='text-align:center;font-size:.7rem;font-weight:600;color:var(--navy);white-space:pre-line'>{lbl}</div>",
-            unsafe_allow_html=True)
-    st.markdown("<hr style='margin:.3rem 0;border-color:#e5e7eb'>", unsafe_allow_html=True)
-
-    for room in st.session_state.rooms:
-        r_cols = st.columns([2] + [1] * len(st.session_state.sessions))
-        r_cols[0].markdown(f"<div style='font-weight:600;color:#374151;font-size:.88rem;padding-top:.3rem'>{room}</div>",
-                           unsafe_allow_html=True)
-        for j, session in enumerate(st.session_state.sessions):
-            cur = st.session_state.matrix.get((room, session), False)
-            checked = r_cols[j+1].checkbox("", value=cur, key=f"mx_{room}_{session}",
-                                           label_visibility="collapsed")
-            st.session_state.matrix[(room, session)] = checked
-
-    # Generate
-    st.markdown("<div style='margin-top:1.6rem'></div>", unsafe_allow_html=True)
-    _, btn_col, _ = st.columns([1, 2, 1])
-    with btn_col:
-        if st.button("⚡  توليد جدول المراقبة", use_container_width=True, type="primary"):
-            st.session_state.input_mode = "quick"
-            _run_scheduler()
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE: RESULTS
@@ -619,7 +447,7 @@ elif st.session_state.page == "results":
     </div>""", unsafe_allow_html=True)
 
     if st.button("← عودة"):
-        go("input_excel" if st.session_state.get("input_mode") == "excel" else "input_quick")
+        go("input_excel")
 
     data, schedule = st.session_state.result
     # backup varies per session
