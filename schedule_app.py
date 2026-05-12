@@ -316,16 +316,18 @@ def _run_scheduler():
         max_usable = 2 * len(active_pairs)
         if len(teachers) > max_usable:
             errors.append(f"عدد الأساتذة كبير جداً — الحد الأقصى {max_usable} لـ {len(active_pairs)} زوج نشط")
-        # each teacher is backup at most once → need enough teachers for total backup slots
+        # each teacher is backup exactly once → total backup slots must equal N teachers
         total_backup_slots = sum(
             math.ceil(0.22 * 2 * rooms_per_sess[s]) for s in rooms_per_sess
         )
-        if len(teachers) < total_backup_slots:
+        if total_backup_slots != len(teachers):
             errors.append(
-                f"عدد الأساتذة غير كافٍ لقاعدة الاحتياطي — "
-                f"مجموع خانات الاحتياط في كل الحصص = {total_backup_slots}، "
-                f"لكن كل أستاذ لا يمكن أن يكون احتياطياً إلا مرة واحدة. "
-                f"يلزم على الأقل {total_backup_slots} أستاذاً (لديك {len(teachers)})"
+                f"عدد الأساتذة يجب أن يساوي تماماً مجموع خانات الاحتياطي في كل الحصص — "
+                f"مجموع الخانات = {total_backup_slots} "
+                f"(22% × 2 × عدد القاعات لكل حصة)، "
+                f"لكن لديك {len(teachers)} أستاذاً. "
+                f"{'أضف' if len(teachers) < total_backup_slots else 'احذف'} "
+                f"{abs(total_backup_slots - len(teachers))} أستاذ."
             )
 
     if errors:

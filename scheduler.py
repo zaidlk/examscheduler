@@ -132,14 +132,18 @@ def build_schedule(
             if t not in subject_locked[s]:
                 model.Add(m[(t, s)] == 0)
 
-    # ── 6. Every teacher must have ≥1 duty (of any kind) across all sessions ─
+    # ── 6. Each teacher must be احتياطي exactly once across all sessions ────────
+    for t in teachers:
+        model.Add(sum(b[(t, s)] for s in sessions) == 1)
+
+    # ── 7. Every teacher must have ≥1 duty (of any kind) across all sessions ─
     for t in teachers:
         sup_total = sum(x[(t, r, s)] for (r, s) in active_pairs)
         bup_total = sum(b[(t, s)]    for s in sessions)
         mou_total = sum(m[(t, s)]    for s in sessions)
         model.Add(sup_total + bup_total + mou_total >= 1)
 
-    # ── 7. Balanced load ──────────────────────────────────────────────────────
+    # ── 8. Balanced load ──────────────────────────────────────────────────────
     # Count مداوم slots: one per (session × subject) where a teacher is assigned
     mou_total_slots = sum(
         len([subj for subj in session_subjects.get(s, []) if subj and
