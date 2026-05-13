@@ -97,11 +97,35 @@ def build_schedule(
             model.Add(sum(in_rooms) + b[(t, s)] + m[(t, s)] <= 1)
 
     # ── 4. Each teacher is احتياطي exactly once (priority) ─────────────────────
-    # At least 1 backup per active session for operational safety.
-    # No fixed per-session quota — the solver distributes freely.
-    for s in sessions:
-        if rooms_in_session[s]:
-            model.Add(sum(b[(t, s)] for t in teachers) >= 1)
+    # Distribute N backups proportionally to active rooms per session.
+    # target_s = round(N × rooms_s / Σ rooms_all), floor ≤ b_s ≤ ceil
+    import math as _math
+    total_rooms_all = sum(len(v) for v in rooms_in_session.values())
+    N = len(teachers)
+
+    if total_rooms_all > 0:
+        # compute floor/ceil targets
+        raw = {s: N * len(rooms_in_session[s]) / total_rooms_all for s in sessions}
+        floors = {s: int(_math.floor(raw[s])) for s in sessions}
+        ceils  = {s: int(_math.ceil(raw[s]))  for s in sessions}
+
+        # adjust so floors sum == N (distribute remainders to largest fractional parts)
+        remainder = N - sum(floors.values())
+        sorted_sess = sorted(sessions, key=lambda s: -(raw[s] - floors[s]))
+        for s in sorted_sess[:remainder]:
+            floors[s] += 1
+        ceils = {s: max(floors[s], ceils[s]) for s in sessions}
+
+        for s in sessions:
+            if rooms_in_session[s]:   # active session
+                model.Add(sum(b[(t, s)] for t in teachers) >= floors[s])
+                model.Add(sum(b[(t, s)] for t in teachers) <= ceils[s])
+            else:
+                model.Add(sum(b[(t, s)] for t in teachers) == 0)
+    else:
+        for s in sessions:
+            model.Add(sum(b[(t, s)] for t in teachers) >= 1 if rooms_in_session[s] else
+                      model.Add(sum(b[(t, s)] for t in teachers) == 0))
 
     # ── 5. مداوم constraints ──────────────────────────────────────────────────
     for s in sessions:
