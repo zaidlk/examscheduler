@@ -45,11 +45,6 @@ def build_schedule(
         s: [r for r in rooms if (r, s) in active_pairs]
         for s in sessions
     }
-    backup_per_session: Dict[str, int] = {
-        s: math.ceil(BACKUP_RATIO * 2 * len(rooms_in_session[s]))
-        for s in sessions
-    }
-
     # For each session, which teachers are "subject-locked"
     # (teach a subject that is examined in that session)?
     subject_locked: Dict[str, Set[str]] = {}
@@ -101,9 +96,12 @@ def build_schedule(
             in_rooms = [x[(t, r, s)] for r in rooms_in_session[s]]
             model.Add(sum(in_rooms) + b[(t, s)] + m[(t, s)] <= 1)
 
-    # ── 4. احتياطي count per session ─────────────────────────────────────────
+    # ── 4. Each teacher is احتياطي exactly once (priority) ─────────────────────
+    # At least 1 backup per active session for operational safety.
+    # No fixed per-session quota — the solver distributes freely.
     for s in sessions:
-        model.Add(sum(b[(t, s)] for t in teachers) == backup_per_session[s])
+        if rooms_in_session[s]:
+            model.Add(sum(b[(t, s)] for t in teachers) >= 1)
 
     # ── 5. مداوم constraints ──────────────────────────────────────────────────
     for s in sessions:
@@ -152,7 +150,7 @@ def build_schedule(
     )
     total_slots = (
         2 * len(active_pairs)
-        + sum(backup_per_session.values())
+        + len(teachers)        # exactly 1 backup duty per teacher
         + mou_total_slots
     )
     avg = (total_slots + len(teachers) - 1) // len(teachers)

@@ -316,18 +316,13 @@ def _run_scheduler():
         max_usable = 2 * len(active_pairs)
         if len(teachers) > max_usable:
             errors.append(f"عدد الأساتذة كبير جداً — الحد الأقصى {max_usable} لـ {len(active_pairs)} زوج نشط")
-        # each teacher is backup exactly once → total backup slots must equal N teachers
-        total_backup_slots = sum(
-            math.ceil(0.22 * 2 * rooms_per_sess[s]) for s in rooms_per_sess
-        )
-        if total_backup_slots != len(teachers):
+        # each teacher is backup exactly once →
+        # N teachers must be >= N active sessions (each needs at least 1 backup)
+        n_active_sessions = sum(1 for s in rooms_per_sess if rooms_per_sess[s] > 0)
+        if len(teachers) < n_active_sessions:
             errors.append(
-                f"عدد الأساتذة يجب أن يساوي تماماً مجموع خانات الاحتياطي في كل الحصص — "
-                f"مجموع الخانات = {total_backup_slots} "
-                f"(22% × 2 × عدد القاعات لكل حصة)، "
-                f"لكن لديك {len(teachers)} أستاذاً. "
-                f"{'أضف' if len(teachers) < total_backup_slots else 'احذف'} "
-                f"{abs(total_backup_slots - len(teachers))} أستاذ."
+                f"عدد الأساتذة ({len(teachers)}) أقل من عدد الحصص النشطة "
+                f"({n_active_sessions}) — كل حصة تحتاج على الأقل احتياطياً واحداً."
             )
 
     if errors:
@@ -452,11 +447,11 @@ elif st.session_state.page == "results":
         go("input_excel")
 
     data, schedule = st.session_state.result
-    # backup varies per session
-    bup_per_sess = {
-        s: math.ceil(0.22 * 2 * sum(1 for r in data.rooms if (r, s) in data.active_pairs))
-        for s in data.sessions
-    }
+    # total backups = 1 per teacher (exactly-once constraint)
+    total_bup = len(data.teachers)
+    bup_per_sess = {}
+    for s in data.sessions:
+        bup_per_sess[s] = len(schedule.backups.get(s, []))
 
     st.success(f"✅  تم توليد الجدول بنجاح!")
 
@@ -464,7 +459,7 @@ elif st.session_state.page == "results":
     st.markdown(f"""
     <div class="mrow">
       <div class="mc"><div class="mv">{len(data.teachers)}</div><div class="ml">👨‍🏫 أستاذ</div></div>
-      <div class="mc"><div class="mv">{min(bup_per_sess.values())}–{max(bup_per_sess.values())}</div><div class="ml">🔁 احتياطيون / حصة</div></div>
+      <div class="mc"><div class="mv">{total_bup}</div><div class="ml">🔁 إجمالي الاحتياطيين</div></div>
       <div class="mc"><div class="mv">{len(data.active_pairs)}</div><div class="ml">✅ زوج نشط</div></div>
       <div class="mc"><div class="mv">{avg_load}</div><div class="ml">📊 متوسط الحصص</div></div>
     </div>""", unsafe_allow_html=True)
