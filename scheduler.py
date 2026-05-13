@@ -96,36 +96,47 @@ def build_schedule(
             in_rooms = [x[(t, r, s)] for r in rooms_in_session[s]]
             model.Add(sum(in_rooms) + b[(t, s)] + m[(t, s)] <= 1)
 
-    # ── 4. Each teacher is احتياطي exactly once (priority) ─────────────────────
-    # Distribute N backups proportionally to active rooms per session.
-    # target_s = round(N × rooms_s / Σ rooms_all), floor ≤ b_s ≤ ceil
-    import math as _math
+    # ── 4. Each teacher is احتياطي exactly once — distributed proportionally ────
+    # Free pool per session = teachers not locked as مداوم in that session.
+    # target_s = N × rooms_s / Σ rooms_all, clamped to free pool size.
+    # Floors are adjusted so Σ floors == N exactly.
+
+    N             = len(teachers)
     total_rooms_all = sum(len(v) for v in rooms_in_session.values())
-    N = len(teachers)
 
-    if total_rooms_all > 0:
-        # compute floor/ceil targets
-        raw = {s: N * len(rooms_in_session[s]) / total_rooms_all for s in sessions}
-        floors = {s: int(_math.floor(raw[s])) for s in sessions}
-        ceils  = {s: int(_math.ceil(raw[s]))  for s in sessions}
-
-        # adjust so floors sum == N (distribute remainders to largest fractional parts)
-        remainder = N - sum(floors.values())
-        sorted_sess = sorted(sessions, key=lambda s: -(raw[s] - floors[s]))
-        for s in sorted_sess[:remainder]:
-            floors[s] += 1
-        ceils = {s: max(floors[s], ceils[s]) for s in sessions}
-
+    # No active rooms at all → no backups anywhere
+    if total_rooms_all == 0:
         for s in sessions:
-            if rooms_in_session[s]:   # active session
-                model.Add(sum(b[(t, s)] for t in teachers) >= floors[s])
-                model.Add(sum(b[(t, s)] for t in teachers) <= ceils[s])
-            else:
-                model.Add(sum(b[(t, s)] for t in teachers) == 0)
+            model.Add(sum(b[(t, s)] for t in teachers) == 0)
     else:
+        # Proportional raw targets
+        raw = {
+            s: N * len(rooms_in_session[s]) / total_rooms_all
+            for s in sessions
+        }
+        floors = {s: int(math.floor(raw[s])) for s in sessions}
+        ceils  = {s: int(math.ceil(raw[s]))  for s in sessions}
+
+        # Distribute remainder to sessions with largest fractional parts
+        remainder = N - sum(floors.values())
+        for s in sorted(sessions, key=lambda s: -(raw[s] - floors[s]))[:remainder]:
+            floors[s] += 1
+
+        # Clamp floor/ceil to the free pool of each session
+        # (teachers who are مداوم in session s cannot be backup there)
         for s in sessions:
-            model.Add(sum(b[(t, s)] for t in teachers) >= 1 if rooms_in_session[s] else
-                      model.Add(sum(b[(t, s)] for t in teachers) == 0))
+            free_pool = len([t for t in teachers if t not in subject_locked[s]])
+            floors[s] = min(floors[s], free_pool)
+            ceils[s]  = max(floors[s], min(ceils[s], free_pool))
+
+        # Hard per-session bounds
+        for s in sessions:
+            b_sum = sum(b[(t, s)] for t in teachers)
+            if rooms_in_session[s]:          # active session
+                model.Add(b_sum >= floors[s])
+                model.Add(b_sum <= ceils[s])
+            else:                            # inactive session → no backups
+                model.Add(b_sum == 0)
 
     # ── 5. مداوم constraints ──────────────────────────────────────────────────
     for s in sessions:
