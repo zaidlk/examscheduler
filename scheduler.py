@@ -3,7 +3,7 @@
 Three roles per session:
   x[(t, r, s)]  : مراقب  — supervises room r in session s
   b[(t, s)]     : احتياطي — backup for session s
-  m[(t, s)]     : مداوم  — subject monitor for session s
+  مداوم are pre-fixed by user input (no solver variable)
 
 Moudawim constraints:
   • For each session s, for each examined subject subj:
@@ -101,7 +101,7 @@ def build_schedule(
     for t in teachers:
         for s in sessions:
             in_rooms = [x[(t, r, s)] for r in rooms_in_session[s]]
-            model.Add(sum(in_rooms) + b[(t, s)] + m[(t, s)] <= 1)
+            model.Add(sum(in_rooms) + b[(t, s)] <= 1)
 
     # ── 4. Each teacher is احتياطي exactly once — distributed proportionally ────
     # Free pool per session = teachers not locked as مداوم in that session.
@@ -145,51 +145,23 @@ def build_schedule(
             else:                            # inactive session → no backups
                 model.Add(b_sum == 0)
 
-    # ── 5. مداوم constraints ──────────────────────────────────────────────────
-    for s in sessions:
-        subjs = session_subjects.get(s, [])
-        for subj in subjs:
-            if not subj:
-                continue
-            subj_teachers = [t for t in teachers if teacher_subjects.get(t, "") == subj]
-            if not subj_teachers:
-                continue
-
-            # 5a. Exactly 1 مداوم per subject per session
-            model.Add(sum(m[(t, s)] for t in subj_teachers) == 1)
-
-            # 5b. No subject teacher can be مراقب or احتياطي in this session
-            for t in subj_teachers:
-                # cannot be مراقب in any room
-                for r in rooms_in_session[s]:
-                    if (t, r, s) in x:
-                        model.Add(x[(t, r, s)] == 0)
-                # cannot be احتياطي
-                model.Add(b[(t, s)] == 0)
-
-        # 5c. Teachers NOT teaching any examined subject cannot be مداوم
-        for t in teachers:
-            if t not in subject_locked[s]:
-                model.Add(m[(t, s)] == 0)
+    # ── 5. مداوم already blocked in step 3 — nothing more needed ──────────────
 
     # ── 6. Each teacher must be احتياطي exactly once across all sessions ────────
     for t in teachers:
         model.Add(sum(b[(t, s)] for s in sessions) == 1)
 
-    # ── 7. Every teacher must have ≥1 duty (of any kind) across all sessions ─
+    # ── 7. Every teacher must have ≥1 duty across all sessions ─────────────────
     for t in teachers:
+        is_moudawim_anywhere = any(t in moudawim_fixed.get(s, []) for s in sessions)
         sup_total = sum(x[(t, r, s)] for (r, s) in active_pairs)
-        bup_total = sum(b[(t, s)]    for s in sessions)
-        mou_total = sum(m[(t, s)]    for s in sessions)
-        model.Add(sup_total + bup_total + mou_total >= 1)
+        bup_total = sum(b[(t, s)] for s in sessions)
+        if not is_moudawim_anywhere:
+            model.Add(sup_total + bup_total >= 1)
 
     # ── 8. Balanced load ──────────────────────────────────────────────────────
     # Count مداوم slots: one per (session × subject) where a teacher is assigned
-    mou_total_slots = sum(
-        len([subj for subj in session_subjects.get(s, []) if subj and
-             any(teacher_subjects.get(t, "") == subj for t in teachers)])
-        for s in sessions
-    )
+    mou_total_slots = sum(len(ts) for ts in moudawim_fixed.values())
     total_slots = (
         2 * len(active_pairs)
         + len(teachers)        # exactly 1 backup duty per teacher
@@ -201,17 +173,20 @@ def build_schedule(
     sq_diffs  = []
     for t in teachers:
         sup_load = sum(x[(t, r, s)] for (r, s) in active_pairs)
-        bup_load = sum(b[(t, s)]    for s in sessions)
-        mou_load = sum(m[(t, s)]    for s in sessions)
-        load     = sup_load + bup_load + mou_load
-        load_vars[t] = load
+        bup_load = sum(b[(t, s)] for s in sessions)
+        # Fixed مداوم assignments: Python int (not a CP-SAT var)
+        mou_fixed = sum(1 for s in sessions if t in moudawim_fixed.get(s, []))
+        load_vars[t] = (sup_load + bup_load, mou_fixed)
 
-        model.Add(load <= avg + 1)
-        model.Add(load >= max(0, avg - 1))
+        # Balance only the solver-assigned portion, accounting for fixed مداوم load
+        effective_avg = max(0, avg - mou_fixed)
+        solver_load   = sup_load + bup_load
+        model.Add(solver_load <= effective_avg + 1)
+        model.Add(solver_load >= max(0, effective_avg - 1))
 
         diff = model.NewIntVar(-1, 1, f"diff_{t}")
         sq   = model.NewIntVar(0,  1, f"sq_{t}")
-        model.Add(diff == load - avg)
+        model.Add(diff == solver_load - effective_avg)
         model.AddMultiplicationEquality(sq, diff, diff)
         sq_diffs.append(sq)
 
@@ -238,12 +213,12 @@ def build_schedule(
         if solver.Value(var):
             backups.setdefault(s, []).append(t)
 
-    moudawim_out: dict = {}
-    for (t, s), var in m.items():
-        if solver.Value(var):
-            moudawim_out.setdefault(s, []).append(t)
+    moudawim_out: dict = {s: list(ts) for s, ts in moudawim_fixed.items() if ts}
 
-    load_out = {t: int(solver.Value(load_vars[t])) for t in teachers}
+    load_out = {
+        t: int(solver.Value(load_vars[t][0])) + load_vars[t][1]
+        for t in teachers
+    }
 
     return ScheduleOutput(
         supervisors=supervisors,

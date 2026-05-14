@@ -343,6 +343,7 @@ def _run_scheduler():
                 data.teachers, data.sessions, data.rooms, data.active_pairs,
                 teacher_subjects=data.teacher_subjects,
                 session_subjects=data.session_subjects,
+                moudawim_fixed=data.moudawim_fixed,
                 time_limit=20,
             )
             st.session_state.result = (data, schedule)

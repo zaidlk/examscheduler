@@ -34,6 +34,7 @@ class InputData:
     session_dates:    Dict[str, str]        = field(default_factory=dict)
     session_times:    Dict[str, str]        = field(default_factory=dict)
     session_subjects: Dict[str, List[str]]  = field(default_factory=dict)
+    moudawim_fixed:   Dict[str, List[str]]  = field(default_factory=dict)  # session -> [teachers]
 
 
 @dataclass
@@ -136,6 +137,8 @@ def _read_new_format(wb) -> InputData:
             "لا توجد أزواج نشطة — تحقق من عمود 'عدد القاعات العاملة' في ورقة الحصص."
         )
 
+    moudawim_fixed = _read_moudawim(wb)
+
     return InputData(
         teachers=teachers, rooms=rooms, sessions=sessions,
         active_pairs=active_pairs,
@@ -144,6 +147,7 @@ def _read_new_format(wb) -> InputData:
         session_dates=session_dates,
         session_times=session_times,
         session_subjects=session_subjects,
+        moudawim_fixed=moudawim_fixed,
     )
 
 
@@ -225,6 +229,22 @@ def _read_old_format(wb) -> InputData:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
+def _read_moudawim(wb) -> "Dict[str, List[str]]":
+    """Read المداومون sheet: {session -> [teacher, ...]} (one per subject row)."""
+    ws = _sheet(wb, "المداومون")
+    if ws is None:
+        return {}
+    result: dict = {}
+    for row in ws.iter_rows(min_row=3, values_only=True):
+        session = _str(row[0]) if len(row) > 0 else ""
+        teacher = _str(row[3]) if len(row) > 3 else ""
+        if session and teacher:
+            result.setdefault(session, [])
+            if teacher not in result[session]:
+                result[session].append(teacher)
+    return result
+
 
 def _sheet(wb, *candidates):
     """Return sheet by trying candidate names (handles unicode normalization)."""
