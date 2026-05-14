@@ -83,12 +83,19 @@ def build_schedule(
     for (r, s) in active_pairs:
         model.Add(sum(x[(t, r, s)] for t in teachers) == 2)
 
-    # ── 2. A teacher is in at most 1 room per session ─────────────────────────
+    # ── 2a. A teacher supervises at most 1 room per session ──────────────────
     for t in teachers:
         for s in sessions:
             in_rooms = [x[(t, r, s)] for r in rooms_in_session[s]]
             if in_rooms:
                 model.Add(sum(in_rooms) <= 1)
+
+    # ── 2b. A teacher supervises each room at most once across ALL sessions ──
+    for t in teachers:
+        for r in rooms:
+            sessions_for_room = [s for s in sessions if (r, s) in active_pairs]
+            if len(sessions_for_room) > 1:
+                model.Add(sum(x[(t, r, s)] for s in sessions_for_room) <= 1)
 
     # ── 3. Exclusive roles: at most one duty per session per teacher ──────────
     for t in teachers:
