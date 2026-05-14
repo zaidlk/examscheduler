@@ -219,12 +219,15 @@ def _read_old_format(wb) -> InputData:
     if not active_pairs:
         raise ValueError("ROOM_SESSION_MATRIX est vide.")
 
+    moudawim_fixed = _read_moudawim(wb)
+
     return InputData(
         teachers=teachers, rooms=rooms, sessions=sessions,
         active_pairs=active_pairs,
         teacher_subjects=teacher_subjects,
         session_dates=session_dates,
         session_subjects=session_subjects,
+        moudawim_fixed=moudawim_fixed,
     )
 
 
